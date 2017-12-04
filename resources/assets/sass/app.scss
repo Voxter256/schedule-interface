@@ -1,0 +1,31 @@
+
+// Fonts
+@import url("https://fonts.googleapis.com/css?family=Raleway:300,400,600");
+
+// Variables
+// @import "variables";
+
+// Bootstrap
+@import "../../../node_modules/bootstrap/scss/bootstrap";
+
+html {
+  font-size: 12px;
+}
+
+// @include media-breakpoint-up(sm) {
+//   html {
+//     font-size: 12px;
+//   }
+// }
+
+@include media-breakpoint-up(md) {
+  html {
+    font-size: 14px;
+  }
+}
+
+@include media-breakpoint-up(lg) {
+  html {
+    font-size: 16px;
+  }
+}
