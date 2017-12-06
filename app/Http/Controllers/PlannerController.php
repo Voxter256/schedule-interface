@@ -37,7 +37,6 @@ class PlannerController extends Controller
         // $start_date = Carbon::createFromFormat("m/d/Y", "11/06/2017");
         // $end_date = Carbon::createFromFormat("m/d/Y", "11/08/2017");
         list ($success, $messages, $call_array) = $this->optimize_vacation($user, $start_date, $end_date);
-        // TODO adjust for success
         if ($success === False){
             $call_array = Null;
         }
@@ -106,6 +105,22 @@ class PlannerController extends Controller
 
     private function able_to_take_vacation($user, $vacation_date_list, &$all_potential_calls, &$messages){
 
+        $user_position_name = $user->position->name;
+
+        // PGY1 can switch with PPP
+        if (in_array($user_position_name, ["PPP", "PGY1"])){
+            $user_position_id_array = [];
+            $positions = Position::whereIn('name', ["PPP", "PGY1"])->get();
+            foreach($positions as $position){
+                $user_position_id_array[] = $position->id;
+            }
+        } else {
+            $user_position_id_array = [$user_position_name];
+        }
+
+
+
+
         $vacation_shifts = Shift::with('service')
         ->whereRaw("\"shifts\".\"shift_date\"::date IN ('" . implode("'::date, '", $vacation_date_list) . "'::date)")
         ->where('physician_id', '=', $user->id)
@@ -121,7 +136,7 @@ class PlannerController extends Controller
                 $errorString = "Can't take vacation on " . $this_shift->service->name;
                 // print($errorString . "</br>");
                 $messages[] = [
-                    'type' => 'error',
+                    'type' => 'danger',
                     'message' => $errorString
                 ];
                 return False;
@@ -135,12 +150,12 @@ class PlannerController extends Controller
             $messages[] = [
                 'type' => 'header',
                 'size' => 'large',
-                'message' => 'Check for enough physicians on ' . $this_shift->shift_date->format('D, M j, Y')
+                'message' => 'Physician count on ' . $this_shift->shift_date->format('D, M j, Y')
             ];
 
             # Rule 2)
             # Must be at least 1 resident on certain services, 2 for Consult-Liaison
-            $other_physicians = Physician::where('position_id', '=', $user->position_id)->where('id', '!=', $user->id)
+            $other_physicians = Physician::whereIn('position_id', $user_position_id_array)->where('id', '!=', $user->id)
             ->whereHas('shifts', function ($query) use (&$this_shift){
                 $query->where('service_id', '=', $this_shift->service_id)->whereDate('shift_date', '=', $this_shift->shift_date->toDateString());
             })->whereDoesntHave('vacations', function ($query) use (&$this_shift){
@@ -151,11 +166,11 @@ class PlannerController extends Controller
                 $plural_string = ($other_physicians->count() != 1) ? "s" : "";
                 $errorString = "On " . $this_shift->shift_date->toDateString() . " there are " . $other_physicians->count()  . " resident" . $plural_string . " on " . $this_shift->service->name .  " when it requires at least " . $this_shift->service->required_number_residents;
                 $messages[] = [
-                    'type' => 'error',
+                    'type' => 'danger',
                     'message' => $errorString
                 ];
 
-                $physicians_on_shift = Physician::where('position_id', '=', $user->position_id)->where('id', '!=', $user->id)
+                $physicians_on_shift = Physician::whereIn('position_id', $user_position_id_array)->where('id', '!=', $user->id)
                 ->whereHas('shifts', function ($query) use (&$this_shift){
                     $query->where('service_id', '=', $this_shift->service_id)->whereDate('shift_date', '=', $this_shift->shift_date->toDateString());
                 })->get();
@@ -167,10 +182,10 @@ class PlannerController extends Controller
                     ];
                 } else {
                     foreach ($physicians_on_shift as $this_physician){
-                            $vacation = $this_physician->vacations->whereDate('start_date', '<=', $this_shift->shift_date->toDateString())->whereDate('end_date', '>=', $this_shift->shift_date->toDateString());
+                            $vacation = Vacation::where('physician_id', $this_physician->id)->whereDate('start_date', '<=', $this_shift->shift_date->toDateString())->whereDate('end_date', '>=', $this_shift->shift_date->toDateString())->first();
                             $info_message = $this_physician->name . " has vacation from " . $vacation->start_date->format('D, M j, Y') . " to " . $vacation->end_date->format('D, M j, Y');
                             $messages[] = [
-                                'type' => 'info',
+                                'type' => 'danger',
                                 'message' => $info_message
                             ];
                     }
@@ -236,6 +251,19 @@ class PlannerController extends Controller
     private function get_potential_call_switch($user, $current_call_days, &$all_potential_calls, &$messages, $not_these_physicians = []){
         # TODO remove call days from vacation date list
 
+        $user_position_name = $user->position->name;
+
+        // PGY1 can switch with PPP
+        if (in_array($user_position_name, ["PPP", "PGY1"])){
+            $user_position_id_array = [];
+            $positions = Position::whereIn('name', ["PPP", "PGY1"])->get();
+            foreach($positions as $position){
+                $user_position_id_array[] = $position->id;
+            }
+        } else {
+            $user_position_id_array = [$user_position_name];
+        }
+
         $potential_shifts = [];
         foreach ($current_call_days as $call_day){
             // print("Call on " . $call_day->shift_date->toDateString() . "</br>");
@@ -250,7 +278,7 @@ class PlannerController extends Controller
 
 
             $physicians_on_service_without_call = Physician::with('shifts')
-            ->where('id', '!=', $user->id)->where('position_id', '=', $user->position_id)
+            ->where('id', '!=', $user->id)->whereIn('position_id', $user_position_id_array)
             ->whereNotIn('id', $not_these_physicians)
             ->whereHas('shifts', function ($query) use (&$call_day){
                 $query->whereDate('shift_date', '=', $call_day->shift_date->toDateString())
@@ -268,7 +296,7 @@ class PlannerController extends Controller
             }
 
             $physicians_on_vacation = Physician::with('shifts')
-            ->where('id', '!=', $user->id)->where('position_id', '=', $user->position_id)
+            ->where('id', '!=', $user->id)->whereIn('position_id', $user_position_id_array)
             ->whereNotIn('id', $not_these_physicians)
             ->whereHas('vacations', function ($query) use (&$call_day){  // Can't be on vacation
                 $query->whereDate('start_date', '<=', $call_day->shift_date->toDateString())->whereDate('end_date', '>=', $call_day->shift_date->toDateString());
@@ -285,7 +313,7 @@ class PlannerController extends Controller
 
             # Find physicians with your title and on a service with call on this call day
             $available_physicians = Physician::with('shifts')
-            ->where('id', '!=', $user->id)->where('position_id', '=', $user->position_id)
+            ->where('id', '!=', $user->id)->whereIn('position_id', $user_position_id_array)
             ->whereNotIn('id', $not_these_physicians)
             ->get();
             // print($available_physicians->count() . "</br>");
@@ -311,7 +339,7 @@ class PlannerController extends Controller
             if (count($available_physicians) == 0){
                 // print("Vacation not possible!");
                 $messages[] = [
-                    'type' => 'error',
+                    'type' => 'danger',
                     'message' => 'No Physicians available to switch your call on ' . $call_day->shift_date->format('D, M j, Y')
                 ];
                 return False;
@@ -343,7 +371,7 @@ class PlannerController extends Controller
             })->get();
 
             # can't be on vacation
-            $potential_shifts = $this->remove_shifts_user_on_vacation($user, $potential_shifts);
+            $potential_shifts = $this->remove_shifts_user_on_vacation($user, $potential_shifts, $messages);
             // print(count($potential_shifts) . "</br>");
 
             # check call days
@@ -461,7 +489,7 @@ class PlannerController extends Controller
         return collect($amended_potential_shifts)->sortBy('shift_date');
     }
 
-    private function remove_shifts_user_on_vacation($user, $potential_shifts){
+    private function remove_shifts_user_on_vacation($user, $potential_shifts, &$messages){
         $vacations = Vacation::where('physician_id', '=', $user->id)->get();
         $amended_potential_shifts = [];
 
@@ -470,6 +498,11 @@ class PlannerController extends Controller
             foreach ($vacations as $vacation){
                 if ($vacation->start_date <= $shift->shift_date && $shift->shift_date <= $vacation->end_date){
                     // print("On Vacation");
+                    $message_text = 'You cannot swap with ' . $shift->physician->name .  'on ' . $shift->shift_date->format('D, M j, Y') . ' because you are on vacation';
+                    $messages[] = [
+                        'type' => 'info',
+                        'message' => $message_text
+                    ];
                     $on_vacation = True;
                     break;
                 }
