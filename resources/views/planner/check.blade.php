@@ -9,7 +9,7 @@ Check Vacation
     <h1 class="display-4">
         Vacation Planner
     </h1>
-    <form method="POST" action="find_vacation">
+    <form method="POST" action="vacation_planner">
         {{ csrf_field() }}
         <div class="form-row container-fluid justify-content-center">
             <div class="form-group col-12">

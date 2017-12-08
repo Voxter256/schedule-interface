@@ -15,8 +15,8 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('find_vacation', 'PlannerController@check_vacation');
-Route::post('find_vacation', 'PlannerController@results');
+Route::get('vacation_planner', 'PlannerController@check_vacation');
+Route::post('vacation_planner', 'PlannerController@results');
 
 Route::get('physicians', 'PhysicianController@index');
 Route::get('physicians/{id}', 'PhysicianController@show');
