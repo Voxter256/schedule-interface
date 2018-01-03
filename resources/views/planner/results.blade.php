@@ -14,6 +14,7 @@ Check Vacation Results
             {{ $start_date->toDateString() }} to {{ $end_date->toDateString() }}
         </h2>
         @if ($success !== False)
+            <h2 class="text-success">Vacation is possible</h2>
             <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#messages" aria-expanded="false" aria-controls="messages">
                 View Logic Messages
             </button>
