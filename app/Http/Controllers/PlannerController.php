@@ -15,7 +15,9 @@ use App\Vacation;
 
 class PlannerController extends Controller
 {
-    //
+    public function __construct(){
+        $this->middleware('auth');
+    }
 
     public function check_vacation(){
         $physicians = Physician::orderBy('name', 'asc')->get();

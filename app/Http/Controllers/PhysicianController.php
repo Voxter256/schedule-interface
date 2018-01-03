@@ -9,6 +9,10 @@ use Carbon\Carbon;
 
 class PhysicianController extends Controller
 {
+    public function __construct(){
+        $this->middleware('auth:');
+    }
+
     public function index(){
         $physicians = Physician::all()->load('position')->sortBy(function($post) {
             $position_order = NULL;
