@@ -83,15 +83,29 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                <div class="navbar-nav">
+                <div class="navbar-nav container-fluid">
                     @auth
+                    <div class="col-sm-9 d-sm-flex">
                         <a class="nav-item nav-link" href="{{ action('HomeController@index') }}">Home</a>
                         <a class="nav-item nav-link" href="{{ action('PhysicianController@index') }}">Physicians</a>
-                        <a class="nav-item nav-link" href="{{ action('PlannerController@check_vacation') }}">Plan Vacation</a>
+                        <a class="nav-item nav-link" href="{{ action('PlannerController@check_vacation') }}">Vacation Planner</a>
                     @else
+                    <div class="container d-flex justify-content-end">
                         <a class="nav-item nav-link" href="{{ route('login') }}">Login</a>
                         <a class="nav-item nav-link" href="{{ route('register') }}">Register</a>
                     @endauth
+                    </div>
+                    @auth
+                    <div class="col-sm-3">
+                        <a class="nav-item nav-link text-sm-right" href="{{ route('logout') }}"
+                            onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                            Logout
+                        </a>
+                        <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
+                            {{ csrf_field() }}
+                        </form>
+                        @endauth
+                    </div>
                 </div>
             </div>
         </nav>
