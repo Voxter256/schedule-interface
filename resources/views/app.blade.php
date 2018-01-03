@@ -90,7 +90,7 @@
                         <a class="nav-item nav-link" href="{{ action('PhysicianController@index') }}">Physicians</a>
                         <a class="nav-item nav-link" href="{{ action('PlannerController@check_vacation') }}">Vacation Planner</a>
                     @else
-                    <div class="container d-flex justify-content-end">
+                    <div class="w-100 d-flex justify-content-end">
                         <a class="nav-item nav-link" href="{{ route('login') }}">Login</a>
                         <a class="nav-item nav-link" href="{{ route('register') }}">Register</a>
                     @endauth
