@@ -91,7 +91,7 @@ class PlannerController extends Controller
             }
         }
 
-        $potential_call_switch = $this->get_potential_call_switch($user, $current_call_days, $all_potential_calls, $messages, $excluded_physicians);
+        $potential_call_switch = $this->get_potential_call_switch($user, $current_call_days, $all_potential_calls, $messages, $excluded_physicians, $vacation_date_list);
 
 
         if ($potential_call_switch == False){
@@ -250,7 +250,7 @@ class PlannerController extends Controller
         return $call_days;
     }
 
-    private function get_potential_call_switch($user, $current_call_days, &$all_potential_calls, &$messages, $not_these_physicians = []){
+    private function get_potential_call_switch($user, $current_call_days, &$all_potential_calls, &$messages, $not_these_physicians = [], $vacation_date_list){
         # TODO remove call days from vacation date list
 
         $user_position_name = $user->position->name;
@@ -335,8 +335,23 @@ class PlannerController extends Controller
 
 
             # get their call days the week of this call
-            $available_physicians = $this->remove_physicians_breaking_call_rules($available_physicians, $call_day, $messages);
+            $potential_individual_shifts = []; // if a physician has call that week, only that call can be switched
+            $available_physicians = $this->remove_physicians_breaking_call_rules($available_physicians, $call_day, $messages, $potential_individual_shifts);
             // print("Final count of available physicians: " . (string) count($available_physicians) . "</br>");
+
+            // can't be one of the requested vacation addDays
+            $potential_individual_shifts = collect($potential_individual_shifts)->filter(function ($value, $key) use ($vacation_date_list, &$messages){
+                $result = !in_array($value->shift_date->toDateString(), $vacation_date_list);
+
+                if (!$result){
+                    $messages[] = [
+                        'type' => 'info',
+                        'message' => $value->physician->name . '\'s call on '. $value->shift_date->format('D, M j, Y') . ' is during your requested vacation'
+                    ];
+                }
+
+                return $result;
+            });
 
             if (count($available_physicians) == 0){
                 // print("Vacation not possible!");
@@ -372,12 +387,17 @@ class PlannerController extends Controller
                 $query->where('is_call', '=', '1');
             })->get();
 
+            # check call days
+            $potential_shifts = $this->remove_shifts_breaking_call_rules($potential_shifts, $user);
+
+            // join $potential_individual_shifts with potential shifts
+            $potential_shifts = $potential_shifts->concat($potential_individual_shifts);
+            $potential_shifts = $potential_shifts->sortBy('shift_date');
+
             # can't be on vacation
             $potential_shifts = $this->remove_shifts_user_on_vacation($user, $potential_shifts, $messages);
             // print(count($potential_shifts) . "</br>");
 
-            # check call days
-            $potential_shifts = $this->remove_shifts_breaking_call_rules($potential_shifts, $user);
             if ($potential_shifts->count() > 0){
                 $all_potential_calls[] = [
                     'original' => $call_day,
@@ -411,7 +431,7 @@ class PlannerController extends Controller
         return $zero_days;
     }
 
-    private function remove_physicians_breaking_call_rules($available_physicians, $call_day, &$messages){
+    private function remove_physicians_breaking_call_rules($available_physicians, $call_day, &$messages, &$potential_individual_shifts){
         $new_available_physicians = [];
         $zero_days = $this->get_zero_days($call_day);
 
@@ -433,8 +453,9 @@ class PlannerController extends Controller
                     // print("Currently has call on: " . $day->shift_date->toDateString() . "</br>");
                     $messages[] = [
                         'type' => 'info',
-                        'message' => $physician->name . ' already has call on '. $day->shift_date->format('D, M j, Y')
+                        'message' => $physician->name . ' already has call on '. $day->shift_date->format('D, M j, Y') . ', so you can only switch that shift'
                     ];
+                    $potential_individual_shifts[] = $day;
                 }
                 // print("</br>");
                 continue;
@@ -500,7 +521,7 @@ class PlannerController extends Controller
             foreach ($vacations as $vacation){
                 if ($vacation->start_date <= $shift->shift_date && $shift->shift_date <= $vacation->end_date){
                     // print("On Vacation");
-                    $message_text = 'You cannot swap with ' . $shift->physician->name .  'on ' . $shift->shift_date->format('D, M j, Y') . ' because you are on vacation';
+                    $message_text = 'You cannot swap with ' . $shift->physician->name .  ' on ' . $shift->shift_date->format('D, M j, Y') . ' because you are on vacation';
                     $messages[] = [
                         'type' => 'info',
                         'message' => $message_text
