@@ -5,7 +5,7 @@ Shifts
 @endsection
 
 @section('content')
-<div class="container-fluid">
+<div class="container">
     <div class="container mb-3 mt-3">
         <form method="POST" action="shifts">
             {{ csrf_field() }}
