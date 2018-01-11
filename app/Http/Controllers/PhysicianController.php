@@ -54,6 +54,8 @@ class PhysicianController extends Controller
     }
 
     public function show($id){
+        $today = Carbon::yesterday();
+
         $physician = Physician::findOrFail($id);
         $physician = $physician->load('shifts', 'shifts.service');
 
@@ -84,7 +86,7 @@ class PhysicianController extends Controller
             }
         }
 
-        $services = $physician->shifts->where('service.is_call', 0)->sortBy('shift_date')->groupBy('service_id');
+        $services = $physician->shifts->where('service.is_call', 0)->where('shift_date', '>=', $today)->sortBy('shift_date')->groupBy('service_id');
         $new_services = [];
         foreach ($services as $service_key => $shifts){
             $previous_date = Carbon::minValue();
@@ -113,6 +115,6 @@ class PhysicianController extends Controller
         $shifts = collect($new_services);
         $shifts = $shifts->sortBy('shift_date');
 
-        return view('physician.show', compact(['physician', 'vacation_days', 'vacation_days_available', 'shifts']));
+        return view('physician.show', compact(['physician', 'vacation_days', 'vacation_days_available', 'shifts', 'today']));
     }
 }

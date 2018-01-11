@@ -11,7 +11,7 @@
             <div class="col-sm bg-light mb-3">
                 <h1 class="text-center">Call Days</h1>
                 @php
-                    $call_shifts = $physician->shifts->sortBy('shift_date');
+                    $call_shifts = $physician->shifts->where('shift_date', '>=', $today)->sortBy('shift_date');
                 @endphp
                 @foreach($call_shifts as $shift)
                     @if ($shift->service->is_call == 1)
