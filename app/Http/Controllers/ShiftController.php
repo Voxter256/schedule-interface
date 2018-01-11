@@ -36,7 +36,7 @@ class ShiftController extends Controller
         }
 
         $physicians_post_call = Physician::where('position_id', '<>', 1)->whereHas('shifts', function ($query) use (&$previous_date){
-            $query->join('services', 'shifts.service_id', 'services.id')->whereDate('shift_date', $previous_date->toDateString())->where('services.is_call', 1);
+            $query->join('services', 'shifts.service_id', 'services.id')->whereDate('shift_date', $previous_date->toDateString())->where('services.is_call', 1)->where('services.has_post_call', 1);
         })->get();
         $physicians_post_call_ids = [];
         foreach ($physicians_post_call as $physician){
@@ -47,8 +47,10 @@ class ShiftController extends Controller
         $call_shifts = [];
 
         $shifts = Shift::whereDate('shift_date', $date)->
+        join('physicians', 'shifts.physician_id', '=', 'physicians.id')->
         whereNotIn('physician_id', $physicians_on_vacation_ids)->
         whereNotIn('physician_id', $physicians_post_call_ids)->
+        where('physicians.position_id', '<>', 1)->
         get();
         $shifts = $shifts->load('physician', 'service')->sortBy(function($post) {
                     $name_array = explode(" ", $post->physician->name);
