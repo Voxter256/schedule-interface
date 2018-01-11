@@ -21,7 +21,7 @@
             </div>
             <div class="col-sm bg-light mb-3">
                 <h1 class="text-center mb-0">Vacation Days</h1>
-                <div class="text-center mb-3"><em>Days Remaining: {{ $vacation_days_available }}</em></div>
+                <div class="text-center mb-3"><em>Days Taken: {{ $vacation_days_taken }}</em></div>
                 @foreach($vacation_days as $vacation_day)
                     <div class="text-center">{{ $vacation_day->start_date->format('D, M j, Y') }} to {{ $vacation_day->end_date->format('D, M j, Y') }}</div>
                 @endforeach

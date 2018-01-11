@@ -68,6 +68,7 @@ class PhysicianController extends Controller
         // print("</br>");
 
         $vacation_days = $physician->vacations->sortBy('start_date');
+        $vacation_days_taken = 0;
         $vacation_days_available = 20;
         if (!in_array($physician->position->name, ["PGY1", "PPP"])){
             $vacation_days_available = 25;
@@ -80,11 +81,13 @@ class PhysicianController extends Controller
             while ($this_date->diffInDays($end_date, false) >= 0){
                 if ($this_date->isWeekday() && !in_array($this_date->toDateString(), $holidays)){
                     // print($this_date->format('D, M j, Y') . "</br>");
-                    $vacation_days_available = $vacation_days_available - 1;
+                    $vacation_days_taken = $vacation_days_taken + 1;
                 }
                 $this_date->addDays(1);
             }
         }
+
+        $vacation_days_available = $vacation_days_available - $vacation_days_taken;
 
         $services = $physician->shifts->where('service.is_call', 0)->where('shift_date', '>=', $today)->sortBy('shift_date')->groupBy('service_id');
         $new_services = [];
@@ -115,6 +118,6 @@ class PhysicianController extends Controller
         $shifts = collect($new_services);
         $shifts = $shifts->sortBy('shift_date');
 
-        return view('physician.show', compact(['physician', 'vacation_days', 'vacation_days_available', 'shifts', 'today']));
+        return view('physician.show', compact(['physician', 'vacation_days', 'vacation_days_taken', 'shifts', 'today']));
     }
 }
