@@ -21,6 +21,9 @@ Route::post('vacation_planner', 'PlannerController@results');
 Route::get('physicians', 'PhysicianController@index');
 Route::get('physicians/{id}', 'PhysicianController@show');
 
+Route::get('shifts', 'ShiftController@show_today');
+Route::post('shifts', 'ShiftController@show_day');
+
 Auth::routes();
 Route::get('register/verify/{token}','Auth\RegisterController@verify');
 

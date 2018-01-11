@@ -88,6 +88,7 @@
                     <div class="col-sm-9 d-sm-flex">
                         <a class="nav-item nav-link" href="{{ action('HomeController@index') }}">Home</a>
                         <a class="nav-item nav-link" href="{{ action('PhysicianController@index') }}">Physicians</a>
+                        <a class="nav-item nav-link" href="{{ action('ShiftController@show_today') }}">Shifts by Day</a>
                         <a class="nav-item nav-link" href="{{ action('PlannerController@check_vacation') }}">Vacation Planner</a>
                     @else
                     <div class="w-100 d-flex justify-content-end">
