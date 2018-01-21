@@ -15,7 +15,7 @@
                 @endphp
                 @foreach($call_shifts as $shift)
                     @if ($shift->service->is_call == 1)
-                        <div class="text-center">{{ $shift->shift_date->format('D, M j, Y') }}: {{ $shift->service->name }} </div>
+                        <div class="text-center"><a href="{{ action('PlannerController@call_results', ['call_id' => $shift->id]) }}">{{ $shift->shift_date->format('D, M j, Y') }}: {{ $shift->service->name }}</a></div>
                         @endif
                 @endforeach
             </div>

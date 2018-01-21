@@ -31,6 +31,18 @@ class PlannerController extends Controller
         return view('planner.check', compact(['physicians', 'user_id']));
     }
 
+    public function call_results($call_id){
+        $shift = Shift::find($call_id);
+        $user = $shift->physician;
+        $start_date = $shift->shift_date;
+        $end_date = $start_date;
+        list ($success, $messages, $call_array) = $this->optimize_vacation($user, $start_date, $end_date, True);
+        if ($success === False){
+            $call_array = Null;
+        }
+        return view('planner.call_results', compact(['start_date', 'end_date', 'success', 'messages', 'call_array']));
+    }
+
     public function results(Request $request){
         $physician_id = $request->input('physician');
         $user = Physician::find($physician_id);
@@ -45,7 +57,7 @@ class PlannerController extends Controller
         return view('planner.results', compact(['start_date', 'end_date', 'success', 'messages', 'call_array']));
     }
 
-    private function optimize_vacation($user, $start_date, $end_date){
+    private function optimize_vacation($user, $start_date, $end_date, $call_switch_only=False){
         $all_potential_calls = [];
         $messages = [];
 
@@ -57,7 +69,11 @@ class PlannerController extends Controller
             $start_date = $start_date_clone;
         }
         // var_dump($vacation_date_list);
-        $vacation_time_valid = $this->able_to_take_vacation($user, $vacation_date_list, $all_potential_calls, $messages);
+        if(!$call_switch_only){
+            $vacation_time_valid = $this->able_to_take_vacation($user, $vacation_date_list, $all_potential_calls, $messages);
+        } else {
+            $vacation_time_valid = True;
+        }
 
         if ($vacation_time_valid !== True){
             return array ($vacation_time_valid, $messages, $all_potential_calls);
@@ -207,12 +223,17 @@ class PlannerController extends Controller
 
                     // print($post_call_day->count() . "</br>");
                     if ($post_call_day->count() >= 1){
-                        $potential_call_switch = $this->get_potential_call_switch($this_other_physician, $post_call_day, $all_potential_calls, $messages, [$user->id]);
+                        $potential_call_switch = $this->get_potential_call_switch($this_other_physician, $post_call_day, $all_potential_calls, $messages, [$user->id], $vacation_date_list);
                         // if (count($potential_call_switch) > 0){
                         //     foreach ($potential_call_switch as $this_potential_call_switch){
                         //         // print($this_potential_call_switch->shift_date->toDateString()  . " " . $this_potential_call_switch->physician->name . " " . $this_potential_call_switch->id . "</br>");
                         //     }
                         // }
+                        $info_message = $this_other_physician->name . " needs their call switched or there will not be enough physicians working on " . $post_call_day[0]->shift_date->toDateString();
+                        $messages[] = [
+                            'type' => 'info',
+                            'message' => $info_message
+                        ];
                     } else {
                         $messages[] = [
                             'type' => 'info',

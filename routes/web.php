@@ -18,6 +18,8 @@ Route::get('/', function () {
 Route::get('vacation_planner', 'PlannerController@check_vacation');
 Route::post('vacation_planner', 'PlannerController@results');
 
+Route::get('call_switch/{call_id}', 'PlannerController@call_results');
+
 Route::get('physicians', 'PhysicianController@index');
 Route::get('physicians/{id}', 'PhysicianController@show');
 
