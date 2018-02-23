@@ -284,7 +284,7 @@ class PlannerController extends Controller
                 $user_position_id_array[] = $position->id;
             }
         } else {
-            $user_position_id_array = [$user_position_name];
+            $user_position_id_array = [$user->position->id];
         }
 
         $potential_shifts = [];
