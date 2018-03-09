@@ -9,5 +9,8 @@
     <p>
         In order to access this site, you will need to register using your "@uhhospitals.org" email.
     </p>
+    <p>
+        Updates and issue tracking are available at <a href="https://github.com/Voxter256/schedule-interface">https://github.com/Voxter256/schedule-interface</a>
+    </p>
 </div>
 @endsection
