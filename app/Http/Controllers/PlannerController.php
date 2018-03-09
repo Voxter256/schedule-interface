@@ -136,9 +136,6 @@ class PlannerController extends Controller
             $user_position_id_array = [$user_position_name];
         }
 
-
-
-
         $vacation_shifts = Shift::with('service')
         ->whereRaw("\"shifts\".\"shift_date\"::date IN ('" . implode("'::date, '", $vacation_date_list) . "'::date)")
         ->where('physician_id', '=', $user->id)
@@ -173,7 +170,7 @@ class PlannerController extends Controller
 
             # Rule 2)
             # Must be at least 1 resident on certain services, 2 for Consult-Liaison
-            $other_physicians = Physician::whereIn('position_id', $user_position_id_array)->where('id', '!=', $user->id)
+            $other_physicians = Physician::where('id', '!=', $user->id)
             ->whereHas('shifts', function ($query) use (&$this_shift){
                 $query->where('service_id', '=', $this_shift->service_id)->whereDate('shift_date', '=', $this_shift->shift_date->toDateString());
             })->whereDoesntHave('vacations', function ($query) use (&$this_shift){
