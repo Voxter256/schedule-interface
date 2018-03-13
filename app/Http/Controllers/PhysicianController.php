@@ -54,7 +54,7 @@ class PhysicianController extends Controller
     }
 
     public function show($id){
-        $today = Carbon::yesterday();
+        $today = Carbon::today();
 
         $physician = Physician::findOrFail($id);
         $physician = $physician->load('shifts', 'shifts.service');
@@ -93,7 +93,13 @@ class PhysicianController extends Controller
         $new_services = [];
         foreach ($services as $service_key => $shifts){
             $previous_date = Carbon::minValue();
-             $filtered_shifts = $shifts->each( function ($shift, $shift_key) use (&$shifts, &$previous_date, &$new_services){
+            if ($shifts->count() == 1){
+                // start and end date are the same if there is only one day left on a service.
+                $new_services[] = $shifts[0];
+                $new_services[] = $shifts[0];
+                continue;
+            }
+            $filtered_shifts = $shifts->each( function ($shift, $shift_key) use (&$shifts, &$previous_date, &$new_services){
                 $shift_date = $shift->shift_date;
                 if ($shift_key == 0) {
                     $previous_date = $shift_date;
