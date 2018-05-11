@@ -126,14 +126,14 @@ class PlannerController extends Controller
         $user_position_name = $user->position->name;
 
         // PGY1 can switch with PPP
-        if (in_array($user_position_name, ["PPP", "PGY1"])){
+        if (in_array($user_position_name, ["PPP", "PGY1", "PGY2"])){
             $user_position_id_array = [];
-            $positions = Position::whereIn('name', ["PPP", "PGY1"])->get();
+            $positions = Position::whereIn('name', ["PPP", "PGY1", "PGY2"])->get();
             foreach($positions as $position){
                 $user_position_id_array[] = $position->id;
             }
         } else {
-            $user_position_id_array = [$user_position_name];
+            $user_position_id_array = [$user->position->id];
         }
 
         $vacation_shifts = Shift::with('service')
