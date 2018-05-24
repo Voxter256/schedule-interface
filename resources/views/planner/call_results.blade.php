@@ -54,11 +54,11 @@ Call Switch Results
             @if ($success !== False)
                 <div class="col">
                 @foreach ($call_array as $call)
-                    <h3>{{ $call['original']->physician->name }}'s call on {{ $call['original']->shift_date->format('D, M j, Y') }}</h3>
+                    <h3>{{ $call['original']->physician->name }}'s {{ $call['original']->service->name }} on {{ $call['original']->shift_date->format('D, M j, Y') }}</h3>
                     @foreach ($call['potentials'] as $potential)
                         <div>
                             <!-- <a class="" data-toggle="collapse" href="#collapseExample" aria-expanded="false" aria-controls="collapseExample"> -->
-                                {{ $potential->physician->name }} on {{ $potential->shift_date->format('D, M j, Y') }}
+                                {{ $potential->physician->name }}'s {{ $potential->service->name }} on {{ $potential->shift_date->format('D, M j, Y') }}
                             <!-- </a> -->
                             <!-- <div class="collapse"> -->
                                 <!-- Test -->
