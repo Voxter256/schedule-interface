@@ -264,7 +264,7 @@ class PlannerController extends Controller
             $shift_days[] = $result->id;
         }
 
-        $call_days = Shift::whereIn('id', $shift_days)->get();
+        $call_days = Shift::with('physician')->whereIn('id', $shift_days)->get();
         return $call_days;
     }
 
@@ -303,7 +303,8 @@ class PlannerController extends Controller
             ->whereHas('shifts', function ($query) use (&$call_day){
                 $query->whereDate('shift_date', '=', $call_day->shift_date->toDateString())
                 ->with('service')->whereHas('service', function ($newQuery){
-                    $newQuery->where('has_call', '=', Null);
+                    $newQuery->where('has_call', '=', Null)
+                    ->where('is_call', '=', 0);
                 });
             })->get();
 
@@ -398,15 +399,16 @@ class PlannerController extends Controller
                 $potential_days_2[] = $x->shift_date->toDateString();
             }
 
-            $potential_shifts = Shift::with('physician')
+            // get shifts of the same call type
+            $potential_shifts = Shift::with('physician')->with('service')
             ->whereIn('physician_id', $available_physicians_final)
             ->whereRaw("\"shifts\".\"shift_date\"::date IN ('" . implode("'::date, '", $potential_days_2) . "'::date)")
-            ->whereHas('service', function ($query){
-                $query->where('is_call', '=', '1');
+            ->whereHas('service', function ($query) use ($call_day){
+                $query->where('id', '=', $call_day->service->id);
             })->get();
 
             # check call days
-            $potential_shifts = $this->remove_shifts_breaking_call_rules($potential_shifts, $user);
+            $potential_shifts = $this->remove_shifts_breaking_call_rules($potential_shifts, $user, $messages);
 
             // join $potential_individual_shifts with potential shifts
             $potential_shifts = $potential_shifts->concat($potential_individual_shifts);
@@ -426,20 +428,34 @@ class PlannerController extends Controller
         return $potential_shifts;
     }
 
-    private function get_zero_days($call_day){
+    private function get_zero_days($call_day, $backup=False){
         # get their call days that week
         $this_shift_date = $call_day->shift_date;
         $this_week_day = $this_shift_date->dayOfWeek;
-        $zero_days_dictionary = array(
-            # numbers are relative to indexed day
-            0 => [-1, 0, 1, 2, 3, 4],  # Sun: not Sat, Sun, next -> Mon, Tue, Wed, Thr
-            1 => [-1, 0, 1, 2, 3],  # Mon: not Sun, Mon, Tue, Wed, Thr
-            2 => [-2, -1, 0, 1, 2],  # Tue: not Sun, Mon, Tue, Wed, Thr
-            3 => [-3, -2, -1, 0, 1],  # Wed: not Sun, Mon, Tue, Wed, Thr
-            4 => [-4, -3, -2, -1, 0, 1],  # Thr: not Sun, Mon, Tue, Wed, Thr, Fri
-            5 => [-1, 0, 1],  # Fri: not Thr, Fri, Sat
-            6 => [-1, 0, 1],  # Sat: not Fri, Sat, Sun
-        );
+        if ($backup){
+            // Can't have backup call after call because you'd automatically have two post call Days
+            $zero_days_dictionary = array(
+                # numbers are relative to indexed day
+                0 => [-1, 0],  # Sun: not Sat, Sun
+                1 => [-1, 0],  # Mon: not Sun, Mon,
+                2 => [-2, -1, 0],  # Tue: not Sun, Mon, Tue
+                3 => [-3, -2, -1, 0],  # Wed: not Sun, Mon, Tue, Wed
+                4 => [-4, -3, -2, -1, 0],  # Thr: not Sun, Mon, Tue, Wed, Thr
+                5 => [-1, 0],  # Fri: not Thr, Fri
+                6 => [-1, 0],  # Sat: not Fri, Sat
+            );
+        } else {
+            $zero_days_dictionary = array(
+                # numbers are relative to indexed day
+                0 => [-1, 0, 1, 2, 3, 4],  # Sun: not Sat, Sun, next -> Mon, Tue, Wed, Thr
+                1 => [-1, 0, 1, 2, 3],  # Mon: not Sun, Mon, Tue, Wed, Thr
+                2 => [-2, -1, 0, 1, 2],  # Tue: not Sun, Mon, Tue, Wed, Thr
+                3 => [-3, -2, -1, 0, 1],  # Wed: not Sun, Mon, Tue, Wed, Thr
+                4 => [-4, -3, -2, -1, 0, 1],  # Thr: not Sun, Mon, Tue, Wed, Thr, Fri
+                5 => [-1, 0, 1],  # Fri: not Thr, Fri, Sat
+                6 => [-1, 0, 1],  # Sat: not Fri, Sat, Sun
+            );
+        }
         $zero_days = [];
         foreach ($zero_days_dictionary[$this_week_day] as $x){
             $this_shift_date_clone = clone($this_shift_date);
@@ -450,8 +466,19 @@ class PlannerController extends Controller
     }
 
     private function remove_physicians_breaking_call_rules($available_physicians, $call_day, &$messages, &$potential_individual_shifts){
+        # Remove physicians breaking call rules if they were to take your shift
+
         $new_available_physicians = [];
-        $zero_days = $this->get_zero_days($call_day);
+        if (strpos($call_day->service->name, "back-up") != False){
+            $zero_days = $this->get_zero_days($call_day, $backup=True);
+        } else {
+            $zero_days = $this->get_zero_days($call_day);
+        }
+
+        if (count($zero_days) == 0){
+            return $available_physicians;
+        }
+
 
         foreach ($available_physicians as $physician){
 
@@ -459,7 +486,7 @@ class PlannerController extends Controller
             $call_days_to_check = Shift::where('physician_id', '=', $physician->id)
             ->whereRaw("\"shifts\".\"shift_date\"::date IN ('" . implode("'::date, '", $zero_days) . "'::date)")
             ->whereHas('service', function ($query){
-                $query->where('is_call', '=', '1');
+                $query->where('has_post_call', '=', '1');
             })->orderBy('shift_date', 'asc')
             ->get();
 
@@ -467,15 +494,23 @@ class PlannerController extends Controller
                 // print($physician->name . '</br>');
                 // print("Too many calls</br>");
                 foreach ($call_days_to_check as $day){
+                    if (strpos($call_day->service->name, "back-up") == false){
+                        // print($call_day->service->name . "</br>");
+                        // print("Currently has call on: " . $day->shift_date->toDateString() . "</br>");
+                        $messages[] = [
+                            'type' => 'info',
+                            'message' => $physician->name . ' already has call on '. $day->shift_date->format('D, M j, Y') . ', so you can only switch that shift'
+                        ];
+                        $potential_individual_shifts[] = $day;
 
-                    // print("Currently has call on: " . $day->shift_date->toDateString() . "</br>");
-                    $messages[] = [
-                        'type' => 'info',
-                        'message' => $physician->name . ' already has call on '. $day->shift_date->format('D, M j, Y') . ', so you can only switch that shift'
-                    ];
-                    $potential_individual_shifts[] = $day;
+                        // print("</br>");
+                    } else {
+                        $messages[] = [
+                            'type' => 'info',
+                            'message' => $physician->name . ' already has call on '. $day->shift_date->format('D, M j, Y') . ', so they can\'t take your backup'
+                        ];
+                    }
                 }
-                // print("</br>");
                 continue;
             }
             $new_available_physicians[] = $physician;
@@ -484,14 +519,21 @@ class PlannerController extends Controller
         return $new_available_physicians;
     }
 
-    private function remove_shifts_breaking_call_rules($potential_shifts, $user){
-        # can't have a second post-call day
+    private function remove_shifts_breaking_call_rules($potential_shifts, $user, &$messages){
+        # Remove shifts of other physicians of which you would be be breaking rules if you take it
 
+        # can't have a second post-call day
         $zero_days_array = [];
         foreach ($potential_shifts as $shift){
-            $zero_days = $this->get_zero_days($shift);
+            if (strpos($shift->service->name, "back-up") != False){
+                $zero_days = $this->get_zero_days($shift, $backup=True);
+            } else {
+                $zero_days = $this->get_zero_days($shift);
+            }
+
             $zero_days_array[$shift->shift_date->toDateString()] = $zero_days;
         }
+        // print(count($zero_days_array) . "</br>");
 
         $zero_days = [];
         foreach ($zero_days_array as $key => $call_day){
@@ -501,11 +543,16 @@ class PlannerController extends Controller
                 }
             }
         }
+        // print(count($zero_days) . "</br>");
+        if (count($zero_days) == 0){
+            // print("No Zero Days");
+            return $potential_shifts;
+        }
 
         $call_days_to_check = Shift::where('physician_id', '=', $user->id)
         ->whereRaw("\"shifts\".\"shift_date\"::date IN ('" . implode("'::date, '", $zero_days) . "'::date)")
         ->whereHas('service', function ($query){
-            $query->where('is_call', '=', '1');
+            $query->where('has_post_call', '=', '1');
         })->orderBy('shift_date', 'asc')
         ->get();
 
@@ -517,11 +564,18 @@ class PlannerController extends Controller
             $is_zero_day = False;
             foreach ($call_days_to_check as $call_day){
                 if (in_array($call_day->shift_date->toDateString(), $zero_days_array[$shift_date])){
+                    $zero_day_call = $call_day;
                     $is_zero_day = True;
                 }
             }
             if (!$is_zero_day){
                 $amended_potential_shifts[] = $shift;
+            } else{
+                // print($shift->physician->name . " " . $shift->service->name . " " .$shift_date . "</br>");
+                $messages[] = [
+                    'type' => 'info',
+                    'message' => 'You have call on '. $zero_day_call->shift_date->format('D, M j, Y') . ', so you can\'t take '. $shift->physician->name . '\'s call on ' . $shift->shift_date->format('D, M j, Y')
+                ];
             }
         }
 
