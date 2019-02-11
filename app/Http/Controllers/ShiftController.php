@@ -47,11 +47,12 @@ class ShiftController extends Controller
         $call_shifts = [];
 
         $shifts = Shift::whereDate('shift_date', $date)->
-        join('physicians', 'shifts.physician_id', '=', 'physicians.id')->
-        whereNotIn('physician_id', $physicians_on_vacation_ids)->
-        whereNotIn('physician_id', $physicians_post_call_ids)->
-        where('physicians.position_id', '<>', 1)->
-        get();
+            join('physicians', 'shifts.physician_id', '=', 'physicians.id')->
+            whereNotIn('physician_id', $physicians_on_vacation_ids)->
+            whereNotIn('physician_id', $physicians_post_call_ids)->
+            where('physicians.position_id', '<>', 1)->
+            get();
+
         $shifts = $shifts->load('physician', 'service')->sortBy(function($post) {
                     $name_array = explode(" ", $post->physician->name);
                     $name_order = end($name_array);
