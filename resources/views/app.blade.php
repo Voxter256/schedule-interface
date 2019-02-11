@@ -112,7 +112,13 @@
         </nav>
         <div class="container-fluid">
             @yield('content')
-        	@yield('footer')
         </div>
+        <footer class="text-muted bg-dark py-4">
+            <div class="container text-center text-light">
+                @auth
+                    Schedule last updated: {{ App\ScheduleUpdate::first()->update_date->toDayDateTimeString() }}
+                @endauth
+            </div>
+        </footer>
     </body>
 </html>
