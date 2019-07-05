@@ -392,6 +392,10 @@ class PlannerController extends Controller
                 $query->where('has_call', '=', '1');
             })->get();
 
+            if ($potential_days->isEmpty()){
+                continue;
+            }
+
             // print($potential_days->count() . "</br>");
 
             $potential_days_2 = [];
