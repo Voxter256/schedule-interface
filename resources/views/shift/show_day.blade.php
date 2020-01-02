@@ -49,7 +49,7 @@ Shifts
         <div class="col-md-2 col-sm-6 bg-light mb-3">
             <h3 class="text-center">On Vacation</h3>
             @foreach($physicians_on_vacation as $physician)
-                <div class="text-center">{{ $physician->name }}
+                <div class="text-center">{{ $physician->name }}</div>
             @endforeach
         </div>
 
