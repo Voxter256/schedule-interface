@@ -170,73 +170,105 @@ class PlannerController extends Controller
 
             # Rule 2)
             # Must be at least 1 resident on certain services, 2 for Consult-Liaison
-            $other_physicians = Physician::where('id', '!=', $user->id)
-            ->whereHas('shifts', function ($query) use (&$this_shift){
-                $query->where('service_id', '=', $this_shift->service_id)->whereDate('shift_date', '=', $this_shift->shift_date->toDateString());
-            })->whereDoesntHave('vacations', function ($query) use (&$this_shift){
-                $query->whereDate('start_date', '<=', $this_shift->shift_date->toDateString())->whereDate('end_date', '>=', $this_shift->shift_date->toDateString());
-            })->get();
 
-            if ($other_physicians->count() < $this_shift->service->required_number_residents){
-                $plural_string = ($other_physicians->count() != 1) ? "s" : "";
-                $errorString = "On " . $this_shift->shift_date->toDateString() . " there are " . $other_physicians->count()  . " resident" . $plural_string . " on " . $this_shift->service->name .  " when it requires at least " . $this_shift->service->required_number_residents;
+            $physicians_on_shift = Physician::whereIn('position_id', $user_position_id_array)->where('id', '!=', $user->id)
+                ->whereHas('shifts', function ($query) use (&$this_shift){
+                    $query->where('service_id', '=', $this_shift->service_id)->whereDate('shift_date', '=', $this_shift->shift_date->toDateString());
+                })->get();
+
+            $physicians_on_shift_count = $physicians_on_shift->count();
+
+            if ($physicians_on_shift_count == 0){
+                # s if plural
+                $s = ($other_physicians->count() != 1) ? "s" : "";
+                $errorString = "On {$this_shift->shift_date->toDateString()} there are {$other_physicians->count()} resident{$s} {$this_shift->service->name} when it requires at least {$this_shift->service->required_number_residents}";
+                $messages[] = [
+                    'type' => 'danger',
+                    'message' => $errorString
+                ];
+                $messages[] = [
+                    'type' => 'info',
+                    'message' => 'There are no other physicians in your year that work this shift'
+                ];
+                return False;
+            }
+
+            $temp_messages = [];
+            $post_call = [];
+
+            foreach ($physicians_on_shift as $this_physician){
+                $vacation = Vacation::where(
+                        'physician_id', $this_physician->id
+                    )->whereDate(
+                        'start_date', '<=', $this_shift->shift_date->toDateString()
+                    )->whereDate(
+                        'end_date', '>=', $this_shift->shift_date->toDateString()
+                    )->first();
+                if ($vacation != NULL){
+                    $info_message = "{$this_physician->name} has vacation from ";
+                    $info_message .= "{$vacation->start_date->format('D, M j, Y')} to";
+                    $info_message .= "$vacation->end_date->format('D, M j, Y')";
+                    $temp_messages[] = [
+                        'type' => 'info',
+                        'message' => $info_message
+                    ];
+                    $physicians_on_shift_count -= 1;
+                } else {
+                    $post_call_day = Shift::where('physician_id', $this_physician->id)
+                        ->whereDate('shift_date', '=', $this_shift->shift_date->subDays(1)->toDateString())
+                        ->whereHas('service', function ($query){
+                            $query->where('is_call', '=', '1');
+                        })->get();
+                    if ($post_call_day->count() >= 1){
+                        $post_call[] = [$this_physician->name, $post_call_day[0]->shift_date->toDateString()];
+                    } else {
+                        $temp_messages[] = [
+                            'type' => "info",
+                            'message' => "{$this_physician->name} is working"
+                        ];
+                    }
+
+                }
+            }
+
+            $required_number_residents = $this_shift->service->required_number_residents;
+            $post_call_count = count($post_call);
+
+            if ($physicians_on_shift_count < $required_number_residents){
+                # s if plural
+                $s = ($physicians_on_shift_count != 1) ? "s" : "";
+                $errorString = "On {$this_shift->shift_date->toDateString()} there are {$physicians_on_shift_count} resident{$s} when {$this_shift->service->name} requires at least {$this_shift->service->required_number_residents}";
                 $messages[] = [
                     'type' => 'danger',
                     'message' => $errorString
                 ];
 
-                $physicians_on_shift = Physician::whereIn('position_id', $user_position_id_array)->where('id', '!=', $user->id)
-                ->whereHas('shifts', function ($query) use (&$this_shift){
-                    $query->where('service_id', '=', $this_shift->service_id)->whereDate('shift_date', '=', $this_shift->shift_date->toDateString());
-                })->get();
+                $messages = array_merge($messages, $temp_messages);
 
-                if ($physicians_on_shift->count() == 0){
+                foreach ($post_call as $post_call_physician){
+                    $info_message = "{$post_call_physician[0]} is post call";
                     $messages[] = [
                         'type' => 'info',
-                        'message' => 'There are no other physicians in your year that work this shift'
+                        'message' => $info_message
                     ];
-                } else {
-                    foreach ($physicians_on_shift as $this_physician){
-                            $vacation = Vacation::where('physician_id', $this_physician->id)->whereDate('start_date', '<=', $this_shift->shift_date->toDateString())->whereDate('end_date', '>=', $this_shift->shift_date->toDateString())->first();
-                            $info_message = $this_physician->name . " has vacation from " . $vacation->start_date->format('D, M j, Y') . " to " . $vacation->end_date->format('D, M j, Y');
-                            $messages[] = [
-                                'type' => 'danger',
-                                'message' => $info_message
-                            ];
-                    }
                 }
-
-
                 return False;
-            } else if ($other_physicians->count() == $this_shift->service->required_number_residents){
-                // print("Check for post call conflicts on " . $this_shift->shift_date->toDateString() . "</br>");
-                foreach ($other_physicians as $this_other_physician){
-                    // print($this_other_physician->name . ": ");
-                    $post_call_day = Shift::where('physician_id', $this_other_physician->id)
-                    ->whereDate('shift_date', '=', $this_shift->shift_date->subDays(1)->toDateString())
-                    ->whereHas('service', function ($query){
-                        $query->where('is_call', '=', '1');
-                    })->get();
 
-                    // print($post_call_day->count() . "</br>");
-                    if ($post_call_day->count() >= 1){
-                        $potential_call_switch = $this->get_potential_call_switch($this_other_physician, $post_call_day, $all_potential_calls, $messages, [$user->id], $vacation_date_list);
-                        // if (count($potential_call_switch) > 0){
-                        //     foreach ($potential_call_switch as $this_potential_call_switch){
-                        //         // print($this_potential_call_switch->shift_date->toDateString()  . " " . $this_potential_call_switch->physician->name . " " . $this_potential_call_switch->id . "</br>");
-                        //     }
-                        // }
-                        $info_message = $this_other_physician->name . " needs their call switched or there will not be enough physicians working on " . $post_call_day[0]->shift_date->toDateString();
-                        $messages[] = [
-                            'type' => 'info',
-                            'message' => $info_message
-                        ];
-                    } else {
-                        $messages[] = [
-                            'type' => 'info',
-                            'message' => 'OK'
-                        ];
-                    }
+            } else if(
+                $post_call_count > 0
+                && ($physicians_on_shift_count - count($post_call)) < $required_number_residents
+            ) {
+                $info_message = "On {$this_shift->shift_date->toDateString()} {$this_shift->service->name} requires at least {$this_shift->service->required_number_residents} physicians and {$physicians_on_shift_count} are theoretically available";
+                $messages[] = [
+                    'type' => 'info',
+                    'message' => $info_message
+                ];
+                foreach ($post_call as $post_call_physician){
+                    $info_message = "{$post_call_physician[0]} may need to get their call switched}";
+                    $messages[] = [
+                        'type' => 'info',
+                        'message' => $info_message
+                    ];
                 }
             } else {
                 $messages[] = [
@@ -244,9 +276,8 @@ class PlannerController extends Controller
                     'message' => 'OK'
                 ];
             }
-
-        }
         return True;
+        }
     }
 
     private function find_current_call_days($user, $vacation_date_list){
